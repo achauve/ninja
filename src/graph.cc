@@ -17,6 +17,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+#include <algorithm>
+
 #include "build_log.h"
 #include "depfile_parser.h"
 #include "disk_interface.h"
@@ -270,6 +272,11 @@ string Edge::GetRspFileContent() {
   return rule_->rspfile_content().Evaluate(&env);
 }
 
+string str_tolower(string s) {
+  std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+  return s;
+}
+
 bool DependencyScan::LoadDepFile(Edge* edge, string* err) {
   METRIC_RECORD("depfile load");
   string path = edge->EvaluateDepFile();
@@ -290,10 +297,13 @@ bool DependencyScan::LoadDepFile(Edge* edge, string* err) {
   // Check that this depfile matches the edge's output.
   Node* first_output = edge->outputs_[0];
   StringPiece opath = StringPiece(first_output->path());
-  if (opath != depfile.out_) {
-    *err = "expected depfile '" + path + "' to mention '" +
-        first_output->path() + "', got '" + depfile.out_.AsString() + "'";
-    return false;
+
+  // hack for case insensitive filesystems (==> Windows)
+  if (str_tolower(opath.AsString()) != str_tolower(depfile.out_.AsString()))
+  {
+      *err = "expected depfile '" + path + "' to mention '" +
+             first_output->path() + "', got '" + depfile.out_.AsString() + "'";
+      return false;
   }
 
   // Preallocate space in edge->inputs_ to be filled in below.
